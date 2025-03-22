@@ -12,20 +12,22 @@ command_categories = {
         "flip_coin": "Flips a coin.",
         "user_info": "Shows information about a user.",
         "react": "Adds a reaction to a message.",
-        "poll": "Creates a simple poll."
+        "poll": "Creates a simple poll.",
     },
     "Moderation": {
         "warn": "Warns a user.",
         "warnings_list": "Displays a user's warnings.",
         "kick": "Kicks a user.",
         "ban": "Bans a user.",
-        "unban": "Unbans a user."
+        "unban": "Unbans a user.",
+        "clear": "Deletes messages in the channel.",
+        "slowmode": "Enables slowmode in the channel.",
     },
     "Configuration": {
         "set_log_channel": "Sets the logging channel for this server.",
-        "set_bad_words": "Configures the list of banned words for this server."
+        "set_bad_words": "Configures the list of banned words for this server.",
     },
     "Testing": {
-        "test": "Command for testing purposes."
+        "test": "Command for testing purposes.",
     },
 }
