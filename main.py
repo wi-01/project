@@ -1,6 +1,7 @@
 import discord
-from discord.ext import commands
 import json, os, re
+from discord.ext import commands
+from datetime import datetime, timedelta
 
 from bot_logic import gen_pass, flip_coin_f, gen_emojis
 from config import main_config, command_categories
@@ -52,7 +53,7 @@ async def on_message(message):
                 await message.delete()
                 await message.channel.send(f"⚠️ {message.author.mention}, your message contains prohibited words.")
             except discord.Forbidden:
-                print("I don't have permission to delete messages.")
+                print("Missing permissions to delete messages")
             break
 
     await bot.process_commands(message)
@@ -88,7 +89,7 @@ async def cmds(ctx, category: str = None):
 
             await ctx.send(embed = embed)
         else:
-            await ctx.send(f"Category '{category}' not found. Use {prefix}cmds to view available categories.")
+            await ctx.send(f"⚠️ Category '{category}' not found. Use {prefix}cmds to view available categories.")
 
 
 @bot.command()
@@ -134,13 +135,13 @@ async def react(ctx, message_id: int, emoji: str):
     try:
         target_message = await ctx.channel.fetch_message(message_id)
         await target_message.add_reaction(emoji)
-        await ctx.send(f"Reacted to message with ID {message_id} using {emoji}.")
+        await ctx.send(f"✅ Reacted to message with ID {message_id} using {emoji}.")
 
     except discord.NotFound:
-        await ctx.send("Message not found.")
+        await ctx.send("⚠️ Message not found.")
 
     except discord.HTTPException:
-        await ctx.send("Error adding reaction.")
+        await ctx.send("❌ Error adding reaction.")
 
 @bot.command()
 async def poll(ctx, *, question: str):
@@ -164,8 +165,8 @@ async def warn(ctx, member: discord.Member, *, reason = "Not specified"):
     member_warns.append(reason)
     save_server_data()
 
-    await ctx.send(f"⚠️ {member.mention} has been warned. Reason: {reason}")
     await member.send(f"⚠️ You were warned from {ctx.guild.name}. Reason: {reason}")
+    await ctx.send(f"⚠️ {member.mention} has been warned. Reason: {reason}")
 
     channel_id = guild_data.get("log_channel_id", log_channel_id)
     log_channel = bot.get_channel(channel_id)
@@ -173,6 +174,7 @@ async def warn(ctx, member: discord.Member, *, reason = "Not specified"):
         await log_channel.send(f"⚠️ {member} was warned by {ctx.author}. Reason: {reason}")
 
 @bot.command()
+@commands.has_permissions(manage_messages = True)
 async def warnings_list(ctx, member: discord.Member):
     guild_id = str(ctx.guild.id)
     guild_data = server_data.get(guild_id, {})
@@ -188,9 +190,9 @@ async def warnings_list(ctx, member: discord.Member):
 @commands.has_permissions(kick_members = True)
 async def kick(ctx, member: discord.Member, *, reason = "Not specified"):
     try:
+        await member.send(f"⛔ You were kicked from {ctx.guild.name}. Reason: {reason}")
         await member.kick(reason = reason)
         await ctx.send(f"⛔ {member.mention} has been kicked <:yes:1273791797797326949>. Reason: {reason}")
-        await member.send(f"⛔ You were kicked from {ctx.guild.name}. Reason: {reason}")
 
         guild_id = str(ctx.guild.id)
         channel_id = server_data.get(guild_id, {}).get("log_channel_id", log_channel_id)
@@ -203,9 +205,10 @@ async def kick(ctx, member: discord.Member, *, reason = "Not specified"):
         await ctx.send(f"Error: {str(e)}")
 
 @bot.command()
-@commands.has_permissions(ban_members=True)
+@commands.has_permissions(ban_members = True)
 async def ban(ctx, member: discord.Member, *, reason = "Not specified"):
     try:
+        await member.send(f"⚠️ You were banned from {ctx.guild.name}. Reason: {reason}")
         await member.ban(reason = reason)
         await ctx.send(f"⛔ {member.mention} has been banned <:yes:1273791797797326949>. Reason: {reason}")
 
@@ -222,9 +225,7 @@ async def ban(ctx, member: discord.Member, *, reason = "Not specified"):
 @bot.command()
 @commands.has_permissions(ban_members = True)
 async def unban(ctx, *, member_name: str):
-    banned_users = await ctx.guild.bans()
-
-    for ban_entry in banned_users:
+    async for ban_entry in ctx.guild.bans():
         user = ban_entry.user
         if user.name == member_name:
             try:
@@ -237,12 +238,32 @@ async def unban(ctx, *, member_name: str):
 
                 if log_channel:
                     await log_channel.send(f"✅ {member_name} was unbanned <:yes:1273791797797326949> by {ctx.author}.")
-
             except Exception as e:
                 await ctx.send(f"Error: {str(e)}")
-
             return
+
     await ctx.send(f"⚠️ User {member_name} not found in the banned list.")
+
+@bot.command()
+@commands.has_permissions(manage_channels = True)
+async def slowmode(ctx, seconds: int):
+    if seconds < 0:
+        await ctx.send("❌ Please provide a non-negative value for slowmode delay.")
+        return
+    
+    try:
+        await ctx.channel.edit(slowmode_delay = seconds)
+        await ctx.send(f"✅ Slowmode has been set to {seconds} second(s).")
+
+        guild_id = str(ctx.guild.id)
+        channel_id = server_data.get(guild_id, {}).get("log_channel_id", log_channel_id)
+        log_channel = bot.get_channel(channel_id)
+        if log_channel:
+            await log_channel.send(f"✅ Slowmode has been set to {seconds} second(s) in {ctx.channel.mention}.")
+
+    except Exception as e:
+        print(f"Error setting slowmode: {e}")
+        await ctx.send("❌ An error occurred while trying to set slowmode.")
 
 @bot.command()
 @commands.has_permissions(administrator = True)
@@ -252,7 +273,7 @@ async def set_log_channel(ctx, channel: discord.TextChannel):
 
     save_server_data()
 
-    await ctx.send(f"Log channel set to {channel.mention}.")
+    await ctx.send(f"✅ Log channel set to {channel.mention}.")
 
 @bot.command()
 @commands.has_permissions(administrator = True)
@@ -262,7 +283,29 @@ async def set_bad_words(ctx, *, words: str):
     server_data.setdefault(guild_id, {})["bad_words"] = word_list
     
     save_server_data()
-    await ctx.send("Bad words list updated: " + ", ".join(word_list))
+    await ctx.send("✅ Bad words list updated: " + ", ".join(word_list))
+
+    guild_id = str(ctx.guild.id)
+    channel_id = server_data.get(guild_id, {}).get("log_channel_id", log_channel_id)
+    log_channel = bot.get_channel(channel_id)
+    if log_channel:
+        await log_channel.send("✅ Bad words list updated: " + ", ".join(word_list))
+
+@bot.command()
+@commands.has_permissions(administrator = True)
+async def clear(ctx, amount: int):
+    if amount < 1 or amount > 100:
+        await ctx.send("❌ Please provide a number between 1 and 100.")
+        return
+    deleted_messages = await ctx.channel.purge(limit = amount)
+    
+    await ctx.send(f"✅ Deleted {len(deleted_messages)} messages.", delete_after = 5)
+
+    guild_id = str(ctx.guild.id)
+    channel_id = server_data.get(guild_id, {}).get("log_channel_id", log_channel_id)
+    log_channel = bot.get_channel(channel_id)
+    if log_channel:
+        await log_channel.send(f"⚠️ {amount} messages were deleted in {ctx.channel.mention}.")
 
 @bot.command()
 async def test(ctx):
